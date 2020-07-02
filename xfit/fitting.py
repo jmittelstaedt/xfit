@@ -26,11 +26,11 @@ if TYPE_CHECKING:
 
 
 def make_fit_dataArray_guesses(
-    yda: DataArray, 
+    yda: 'DataArray', 
     guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
     param_names: Sequence[str], 
     xname: str, 
-    xda: Optional[DataArray] = None, 
+    xda: Optional['DataArray'] = None, 
     guess_func_help_params: Mapping[str, float] = {}
     ):
     """
@@ -112,20 +112,20 @@ def make_fit_dataArray_guesses(
 
 # TODO: make another using leastsq? (to allow for broader cost functions)
 def fit_dataArray(
-    yda: DataArray, 
-    fit_func: Callable[Sequence[float], float], 
+    yda: 'DataArray', 
+    fit_func: Callable[[Sequence[float], float], Sequence[float]], 
     guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
     param_names: Sequence[str], 
     xname: str, 
-    xda: Optional[DataArray] = None, 
+    xda: Optional['DataArray'] = None, 
     yname: Optional[str] = None,
-    yerr_da: Optional[DataArray] = None,
+    yerr_da: Optional['DataArray'] = None,
     bootstrap_samples=0, # TODO: remove bootstraping
     guess_func_help_params: Mapping[str, float] = {}, 
     ignore_faliure: bool = False,
-    selections: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    omissions: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    ranges: Mapping[str: Tuple[float, float]] = {},
+    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    ranges: Mapping[str, Tuple[float, float]] = {},
     **kwargs) -> fitResult:
     """
     Fits values in a data array to a function. Returns an
@@ -326,8 +326,8 @@ def fit_dataArray(
 
 
 def fit_dataset(
-    ds: Dataset, 
-    fit_func: Callable[Sequence[float], float], 
+    ds: 'Dataset', 
+    fit_func: Callable[[Sequence[float], float], Sequence[float]], 
     guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
     param_names: Sequence[str], 
     xname: str,
@@ -337,9 +337,9 @@ def fit_dataset(
     bootstrap_samples=0, # TODO: remove bootstraping
     guess_func_help_params: Mapping[str, float] = {}, 
     ignore_faliure: bool = False,
-    selections: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    omissions: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    ranges: Mapping[str: Tuple[float, float]] = {},
+    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    ranges: Mapping[str, Tuple[float, float]] = {},
     **kwargs
     ) -> fitResult:
     """
@@ -423,7 +423,7 @@ def fit_dataset(
 
 
 def fit_dataArray_models(
-    da: DataArray, 
+    da: 'DataArray', 
     models: Sequence[fitModel], 
     xname: str, # TODO: Explicitly add other arguments
     **kwargs):

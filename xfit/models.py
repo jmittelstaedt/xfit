@@ -35,7 +35,7 @@ class fitParameter:
         self.bounds = bounds
 
 
-    def __eq__(self, other: fitParameter):
+    def __eq__(self, other: 'fitParameter'):
         """ equality determined by name only. maybe bad... idk """
         return self.name == other.name
 
@@ -45,7 +45,7 @@ class fitParameter:
 
 
     # TODO: what to do if bounds don't intersect?
-    def intersect(self, other: fitParameter) -> fitParameter:
+    def intersect(self, other: 'fitParameter') -> 'fitParameter':
         """
         Returns a new fitParameter with bounds which are the intersection
         of the initial ones. Names must be the same, and will be the name of the

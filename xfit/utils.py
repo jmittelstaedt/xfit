@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 def coordinate_slice(
-    ds: T_DSorDA, 
+    ds: 'T_DSorDA', 
     dim: str, 
     llim: float = -np.inf, 
     ulim: float = np.inf
@@ -52,11 +52,11 @@ def coordinate_slice(
 
 
 def da_filter(
-    da: T_DSorDA, 
-    selections: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    omissions: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    ranges: Mapping[str: Tuple[float, float]] = {}
-    ) -> T_DSorDA:
+    da: 'T_DSorDA', 
+    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    ranges: Mapping[str, Tuple[float, float]] = {}
+    ) -> 'T_DSorDA':
     """
     Filters an xarray object subject to some criteria on its coordinates. Keeps
     the intersection of all criteria.
@@ -98,11 +98,11 @@ def da_filter(
 
 
 def gen_coord_combo(
-    ds: T_DSorDA, 
+    ds: 'T_DSorDA', 
     drop_dims: Sequence[str] = [], 
-    selections: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    omissions: Mapping[str: Union[Hashable, Sequence[Hashable]]] = {}, 
-    ranges: Mapping[str: Tuple[float, float]] = {}
+    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    ranges: Mapping[str, Tuple[float, float]] = {}
     ) -> product:
     """
     Generates a cartesian product of combinations of all coordinates of the
@@ -133,19 +133,20 @@ def gen_coord_combo(
     """
 
     remain = da_filter(ds, selections, omissions, ranges)
+    
+    remaining_dims = [d for d in remain.dims if d not in drop_dims]
 
     # Making a cartesian product of all of the coord vals to loop over
-    coord_vals = [np.atleast_1d(remain[dim])
-                  for dim in remain.dims]
+    coord_vals = [np.atleast_1d(remain[dim]) for dim in remaining_dims]
     
     return product(*coord_vals)
 
 
 def gen_copy_ds(
-    ds: T_DSorDA, 
+    ds: 'T_DSorDA', 
     new_dvar_names: Sequence[str], 
     drop_dims: Sequence[str] = []
-    ) -> Dataset:
+    ) -> 'Dataset':
     """
     Generates a copy of `ds` with identical coordinates but given
     data variable names
@@ -178,9 +179,9 @@ def gen_copy_ds(
 
 
 def combine_new_ds_dim(
-    ds_dict: Mapping[str, T_DSorDA], 
+    ds_dict: Mapping[str, 'T_DSorDA'], 
     new_dim: str
-    ) -> T_DSorDA:
+    ) -> 'T_DSorDA':
     """
     Combines a dictionary of datasets along a new dimension using dictionary keys
     as the new coordinates.
