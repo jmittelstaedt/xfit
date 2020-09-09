@@ -97,6 +97,7 @@ def da_filter(
     return final
 
 
+# TODO: add option for dim ordering guarantee?
 def gen_coord_combo(
     ds: 'T_DSorDA', 
     drop_dims: Sequence[str] = [], 
@@ -128,18 +129,22 @@ def gen_coord_combo(
         
     Returns
     -------
+    list
+        List containing dimensions of returned coordinates in the order they
+        are in the product tuples
     itertools.product
         A cartesian product of the remaining dimensions of `ds`
     """
 
     remain = da_filter(ds, selections, omissions, ranges)
     
+    drop_dims = list(np.atleast_1d(drop_dims))
     remaining_dims = [d for d in remain.dims if d not in drop_dims]
 
     # Making a cartesian product of all of the coord vals to loop over
     coord_vals = [np.atleast_1d(remain[dim]) for dim in remaining_dims]
     
-    return product(*coord_vals)
+    return remaining_dims, product(*coord_vals)
 
 
 def gen_copy_ds(
@@ -178,6 +183,7 @@ def gen_copy_ds(
     return xr.Dataset(data_vars=variables, coords=new_coords)
 
 
+# TODO: add option for position of new axis/dimension?
 def combine_new_ds_dim(
     ds_dict: Mapping[str, 'T_DSorDA'], 
     new_dim: str

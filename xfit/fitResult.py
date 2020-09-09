@@ -131,12 +131,10 @@ class fitResult:
         """
         return getattr(self.fit_ds, name)
 
-    # TODO: implement selections, omissions, ranges
     def plot_fits(self, overlay_data = True, hide_large_errors = True,
-                  pts_per_plot = 200, **kwargs):
+                  pts_per_plot = 200, selections=None, omissions=None, ranges=None, **kwargs):
         """
-        Plots the results from fitting of
-        :attr:`~baseAnalysis.fitResult.fit_ds`.
+        Plots the results from fitting of `fit_ds`
 
         Parameters
         ----------
@@ -147,6 +145,13 @@ class fitResult:
             Whether to hide very large error bars
         pts_per_plot : int
             How many points to use for the ``fit_func`` domain.
+        selections : dict
+            Key is dimension name, values are coordinate values which we want to keep
+        omissions : dict
+            Key is dimension name, values are coordinate values which we want to omit
+        ranges : dict
+            Key is dimension name, values are a 2-iterable of a lower and upper limit
+            (inclusive) which we want to keep.
         **kwargs
             Can either be:
             - names of ``dims`` of ``fit_ds``. values should eitherbe single coordinate
@@ -160,12 +165,39 @@ class fitResult:
         None
             Just plots the requested fits.
         """
-        
+
         xlabel = self.main_xda.name if self.main_xda.name is not None else self.xname
 
-        selections = {dim: coords for dim, coords in kwargs.items() if dim in self.fit_ds.dims}
+        selections = {} if selections is None else selections
+        omissions = {} if omissions is None else omissions
+        ranges = {} if ranges is None else ranges
         
-        coord_combos = gen_coord_combo(self.fit_ds, selections=selections)
+        # Account for selections in keyword arguments
+        for kw in kwargs:
+            if kw in self.main_da.dims:
+                selections[kw] = kwargs[kw]
+                
+        xselections = {dim: sel for dim, sel in selections.items() if dim in self.main_xda.dims}
+        xomissions = {dim: sel for dim, sel in omissions.items() if dim in self.main_xda.dims}
+        xranges = {dim: sel for dim, sel in ranges.items() if dim in self.main_xda.dims}
+        
+        pselections = {dim: sel for dim, sel in selections.items() if dim in self.fit_ds.dims}
+        pomissions = {dim: sel for dim, sel in omissions.items() if dim in self.fit_ds.dims}
+        pranges = {dim: sel for dim, sel in ranges.items() if dim in self.fit_ds.dims}
+
+        xda = da_filter(self.main_xda, selections=xselections, omissions=xomissions, ranges=xranges)
+        yda = da_filter(self.main_da, selections=selections, omissions=omissions, ranges=ranges)
+        pds = da_filter(self.fit_ds, selections=pselections, omissions=pomissions, ranges=pranges)
+        
+        if self.yerr_da is not None:
+            yeda = da_filter(self.yerr_da, selections=selections, omissions=omissions, ranges=ranges)
+        else:
+            yeda = None
+
+        combo_dims, coord_combos = gen_coord_combo(pds)
+        
+        # dimensions to show in the title
+        dims_with_many_values = [dim for dim in pds.dims if len(pds[dim])>1]
 
         # Determine which kwargs can be passed to plot
         if self.yerr_da is None:
@@ -176,17 +208,16 @@ class fitResult:
             plot_kwargs = {k: v for k, v in kwargs.items() if k in ebar_argspec.args}
 
         for combo in coord_combos:
-            selection_dict = dict(zip(self.fit_ds.dims, combo))
-            xselection_dict = {k: v for k, v in selection_dict.items() if k in self.main_xda.dims}
-            selected_ds = self.fit_ds.sel(selection_dict)
+            selection_dict = dict(zip(combo_dims, combo))
+            xselection_dict = {k: v for k, v in selection_dict.items() if k in xda.dims}
+            selected_ds = pds.sel(selection_dict)
             
             # Find the domain to fit over
-            data_dom = self.main_xda.sel(xselection_dict).values.copy()
+            data_dom = xda.sel(xselection_dict).values.copy()
             fit_dom = np.linspace(data_dom.min(), data_dom.max(), pts_per_plot)
 
             # extract the fit parameters
-            fit_params = [float(selected_ds[param].values) for param
-                          in self.param_names]
+            fit_params = [float(selected_ds[param].values) for param in self.param_names]
 
             # don't plot if there is no meaningful data
             if np.all(np.isnan(fit_params)):
@@ -196,10 +227,10 @@ class fitResult:
             fit_range = self.fit_func(fit_dom, *fit_params)
             # overlay data if requested
             if overlay_data:
-                data_range = self.main_da.sel(selection_dict).values.copy()
+                data_range = yda.sel(selection_dict).values.copy()
                 # plot errorbars if available
-                if self.yerr_da is not None:
-                    yerr = self.yerr_da.sel(selection_dict).values.copy()
+                if yeda is not None:
+                    yerr = yeda.sel(selection_dict).values.copy()
                     num_pts = yerr.size
                     errlims = np.zeros(num_pts).astype(bool)
                     if hide_large_errors: # hide outliers if requested
@@ -225,9 +256,12 @@ class fitResult:
             if self.yname is not None:
                 plt.ylabel(self.yname)
             title_str = ''
-            for item in selection_dict.items():
-                title_str += '{}: {}, '.format(*item)
-            plt.title(title_str[:-2]) # get rid of trailing comma and space
+            for dim in dims_with_many_values:
+                title_str += '{}: {}, '.format(dim, selection_dict[dim])
+            try:
+                plt.title(title_str[:-2]) # get rid of trailing comma and space
+            except:
+                plt.title('')
             plt.show()
 
 class fitResultModel(fitResult):
@@ -249,128 +283,158 @@ class fitResultModel(fitResult):
         self.models = models
         self.modelsd = {m.name : m for m in models}
     
-    # TODO: implement selections, omissions, ranges
     def plot_model_fits(self, plot_models='all', plot_total=True, background_models=[],
                             overlay_data=True, hide_large_errors=True,
-                            pts_per_plot=200, show_legend=True, **kwargs):
-            """
-            Plots individual models
-            
-            Parameters
-            ----------
-            plot_models : str or list of str
-                names of models to plot
-            plot_total : bool
-                wheter to also plot the sum of all of the models
-            background_models : str or list of str
-                models to use as a background, being added to each of the individual
-                models to be plotted
-            overlay_data : bool
-                whether to overlay the raw data
-            hide_large_errors : bool
-                wheter to try to hide large errorbars
-            pts_per_plot : int
-                Number of points to use in the fit curves
-            show_legend : bool
-                whether to show the legend on the plot        
-            """
-            
-            xlabel = self.main_xda.name if self.main_xda.name is not None else self.xname
-            
-            # check that all models are valid
-            if plot_models == 'all':
-                plot_models = list(x for x in self.modelsd.keys() if x not in background_models)
-            elif isinstance(plot_models, str):
-                plot_models = [plot_models]
-            if isinstance(background_models, str):
-                background_models = [background_models]
-            for m in (plot_models+background_models):
-                if m not in self.modelsd:
-                    raise ValueError(f"{m} is not a model of this system! Included models are: {self.modelsd.keys()}")
-            
-            bg_models = [self.modelsd[mod] for mod in background_models]
-            fg_models = [self.modelsd[mod] for mod in plot_models]
+                            pts_per_plot=200, show_legend=True, selections=None, 
+                            omissions=None, ranges=None, **kwargs):
+        """
+        Plots individual models
+        
+        Parameters
+        ----------
+        plot_models : str or list of str
+            names of models to plot
+        plot_total : bool
+            wheter to also plot the sum of all of the models
+        background_models : str or list of str
+            models to use as a background, being added to each of the individual
+            models to be plotted
+        overlay_data : bool
+            whether to overlay the raw data
+        hide_large_errors : bool
+            wheter to try to hide large errorbars
+        pts_per_plot : int
+            Number of points to use in the fit curves
+        show_legend : bool
+            whether to show the legend on the plot        
+        """
+        
+        xlabel = self.main_xda.name if self.main_xda.name is not None else self.xname
+        
+        # check that all models are valid
+        if plot_models == 'all':
+            plot_models = list(x for x in self.modelsd.keys() if x not in background_models)
+        elif isinstance(plot_models, str):
+            plot_models = [plot_models]
+        if isinstance(background_models, str):
+            background_models = [background_models]
+        for m in (plot_models+background_models):
+            if m not in self.modelsd:
+                raise ValueError(f"{m} is not a model of this system! Included models are: {self.modelsd.keys()}")
+        
+        bg_models = [self.modelsd[mod] for mod in background_models]
+        fg_models = [self.modelsd[mod] for mod in plot_models]
 
-            
-            selections = {dim: coords for dim, coords in kwargs.items() if dim in self.fit_ds.dims}
-            
-            coord_combos = gen_coord_combo(self.fit_ds, selections=selections)
+        selections = {} if selections is None else selections
+        omissions = {} if omissions is None else omissions
+        ranges = {} if ranges is None else ranges
+        
+        # Account for selections in keyword arguments
+        for kw in kwargs:
+            if kw in self.main_da.dims:
+                selections[kw] = kwargs[kw]
+                
+        xselections = {dim: sel for dim, sel in selections.items() if dim in self.main_xda.dims}
+        xomissions = {dim: sel for dim, sel in omissions.items() if dim in self.main_xda.dims}
+        xranges = {dim: sel for dim, sel in ranges.items() if dim in self.main_xda.dims}
+        
+        pselections = {dim: sel for dim, sel in selections.items() if dim in self.fit_ds.dims}
+        pomissions = {dim: sel for dim, sel in omissions.items() if dim in self.fit_ds.dims}
+        pranges = {dim: sel for dim, sel in ranges.items() if dim in self.fit_ds.dims}
 
-            # Determine which kwargs can be passed to plot
-            if self.yerr_da is None:
-                plot_argspec = getfullargspec(Line2D)
-                plot_kwargs = {k: v for k, v in kwargs.items() if k in plot_argspec.args}
-            else:
-                ebar_argspec = getfullargspec(plt.errorbar)
-                plot_kwargs = {k: v for k, v in kwargs.items() if k in ebar_argspec.args}
+        xda = da_filter(self.main_xda, selections=xselections, omissions=xomissions, ranges=xranges)
+        yda = da_filter(self.main_da, selections=selections, omissions=omissions, ranges=ranges)
+        pds = da_filter(self.fit_ds, selections=pselections, omissions=pomissions, ranges=pranges)
+        
+        if self.yerr_da is not None:
+            yeda = da_filter(self.yerr_da, selections=selections, omissions=omissions, ranges=ranges)
+        else:
+            yeda = None
 
-            for combo in coord_combos:
-                selection_dict = dict(zip(self.fit_ds.dims, combo))
-                xselection_dict = {k: v for k, v in selection_dict.items() if k in self.main_xda.dims}
-                selected_ds = self.fit_ds.sel(selection_dict)
+        combo_dims, coord_combos = gen_coord_combo(pds)
+        
+        # dimensions to show in the title
+        dims_with_many_values = [dim for dim in pds.dims if len(pds[dim])>1]
+
+        # Determine which kwargs can be passed to plot
+        if self.yerr_da is None:
+            plot_argspec = getfullargspec(Line2D)
+            plot_kwargs = {k: v for k, v in kwargs.items() if k in plot_argspec.args}
+        else:
+            ebar_argspec = getfullargspec(plt.errorbar)
+            plot_kwargs = {k: v for k, v in kwargs.items() if k in ebar_argspec.args}
+
+        for combo in coord_combos:
+            selection_dict = dict(zip(combo_dims, combo))
+            xselection_dict = {k: v for k, v in selection_dict.items() if k in xda.dims}
+            selected_ds = pds.sel(selection_dict)
+            
+            # extract selected parameters
+            all_params = {pn : float(selected_ds[pn].values) for pn in self.param_names}
+            
+            data_dom = xda.sel(xselection_dict).values.copy()
+            fit_dom = np.linspace(data_dom.min(), data_dom.max(), pts_per_plot)
+            
+            # don't plot if there is no meaningful data
+            if np.all(np.isnan(list(all_params.values()))):
+                continue
+            
+            # generate the background offset
+            background = np.zeros(fit_dom.size)
+            for m in bg_models:
+                bgparams = [all_params[p.name] for p in m.params]
+                background += m(fit_dom, *bgparams)
+            
+            # overlay data if requested
+            if overlay_data:
+                data_range = yda.sel(selection_dict).values.copy()
+                # plot errorbars if available
+                if yeda is not None:
+                    yerr = yeda.sel(selection_dict).values.copy()
+                    num_pts = yerr.size
+                    errlims = np.zeros(num_pts).astype(bool)
+                    if hide_large_errors: # hide outliers if requested
+                        data_avg = np.mean(data_range)
+                        data_std = np.std(data_range)
+                        for i, err in enumerate(yerr):
+                            if err > 5*data_std:
+                                yerr[i] = data_std*.5 # TODO: Find some better way of marking this
+                                errlims[i] = True
+                        for i, val in enumerate(data_range):
+                            if np.abs(val - data_avg) > 5*data_std:
+                                data_range[i] = data_avg
+                                yerr[i] = data_std*0.5
+                                errlims[i] = True
+                    plt.errorbar(data_dom, data_range, yerr, lolims=errlims,
+                                uplims=errlims, **plot_kwargs)
+                else:
+                    plt.plot(data_dom, data_range, **plot_kwargs)
+            
+            # plot the full model, if requested
+            if plot_total:
+                modparams = [all_params[pn] for pn in self.param_names]
+                plt.plot(fit_dom, self.fit_func(fit_dom, *modparams), label='total')
+            
+            # plot the models
+            for m in fg_models:
+                modparams = [all_params[p.name] for p in m.params]
+                plt.plot(fit_dom, m(fit_dom, *modparams) + background, label=m.name)
+            
+            # add labels and make the title reflect the current selection
+            plt.xlabel(xlabel)
+            if self.yname is not None:
+                plt.ylabel(self.yname)
                 
-                # extract selected parameters
-                all_params = {pn : float(selected_ds[pn].values) for pn in self.param_names}
-                
-                data_dom = self.main_xda.sel(xselection_dict).values.copy()
-                fit_dom = np.linspace(data_dom.min(), data_dom.max(), pts_per_plot)
-                
-                # don't plot if there is no meaningful data
-                if np.all(np.isnan(list(all_params.values()))):
-                    continue
-                
-                # generate the background offset
-                background = np.zeros(fit_dom.size)
-                for m in bg_models:
-                    bgparams = [all_params[p.name] for p in m.params]
-                    background += m(fit_dom, *bgparams)
-                
-                # overlay data if requested
-                if overlay_data:
-                    data_range = self.main_da.sel(selection_dict).values.copy()
-                    # plot errorbars if available
-                    if self.yerr_da is not None:
-                        yerr = self.yerr_da.sel(selection_dict).values.copy()
-                        num_pts = yerr.size
-                        errlims = np.zeros(num_pts).astype(bool)
-                        if hide_large_errors: # hide outliers if requested
-                            data_avg = np.mean(data_range)
-                            data_std = np.std(data_range)
-                            for i, err in enumerate(yerr):
-                                if err > 5*data_std:
-                                    yerr[i] = data_std*.5 # TODO: Find some better way of marking this
-                                    errlims[i] = True
-                            for i, val in enumerate(data_range):
-                                if np.abs(val - data_avg) > 5*data_std:
-                                    data_range[i] = data_avg
-                                    yerr[i] = data_std*0.5
-                                    errlims[i] = True
-                        plt.errorbar(data_dom, data_range, yerr, lolims=errlims,
-                                    uplims=errlims, **plot_kwargs)
-                    else:
-                        plt.plot(data_dom, data_range, **plot_kwargs)
-                
-                # plot the full model, if requested
-                if plot_total:
-                    modparams = [all_params[pn] for pn in self.param_names]
-                    plt.plot(fit_dom, self.fit_func(fit_dom, *modparams), label='total')
-                
-                # plot the models
-                for m in fg_models:
-                    modparams = [all_params[p.name] for p in m.params]
-                    plt.plot(fit_dom, m(fit_dom, *modparams) + background, label=m.name)
-                
-                # add labels and make the title reflect the current selection
-                plt.xlabel(xlabel)
-                if self.yname is not None:
-                    plt.ylabel(self.yname)
-                title_str = ''
-                for item in selection_dict.items():
-                    title_str += '{}: {}, '.format(*item)
+            title_str = ''
+            for dim in dims_with_many_values:
+                title_str += '{}: {}, '.format(dim, selection_dict[dim])
+            try:
                 plt.title(title_str[:-2]) # get rid of trailing comma and space
-                
-                # add legend if requested
-                if show_legend:
-                    plt.legend()
-                
-                plt.show()
+            except:
+                plt.title('')
+            
+            # add legend if requested
+            if show_legend:
+                plt.legend()
+            
+            plt.show()

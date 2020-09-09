@@ -72,17 +72,15 @@ def make_fit_dataArray_guesses(
     """
 
     xdims = xda.dims
-    
-    remaining_dims = [dim for dim in yda.dims if dim != xname]
 
-    coord_combos = gen_coord_combo(yda, [xname])
+    combo_dims, coord_combos = gen_coord_combo(yda, [xname])
     
     # Generate empty dataset to contain parameter guesses
     guess_ds = gen_copy_ds(yda, param_names, [xname])
 
     # apply guess_func for each coord combo and record param guesses
     for combo in coord_combos:
-        selection_dict = dict(zip(remaining_dims, combo))
+        selection_dict = dict(zip(combo_dims, combo))
         xselection_dict = {k: v for k, v in selection_dict.items() if k in xdims}
 
         # load x/y data for this coordinate combination
@@ -231,12 +229,11 @@ def fit_dataArray(
 
     # Get the selection and empty fit dataset
     fit_ds = gen_copy_ds(yda, full_param_names, [xname])
-    coord_combos = gen_coord_combo(yda, [xname])
-    remaining_dims = [dim for dim in yda.dims if dim != xname]
+    combo_dims, coord_combos = gen_coord_combo(yda, [xname])
 
     # Do the fitting
     for combo in coord_combos:
-        selection_dict = dict(zip(remaining_dims, combo))
+        selection_dict = dict(zip(combo_dims, combo))
         xselection_dict = {k: v for k,v in selection_dict.items() if k in xda.dims}
 
         # load x/y data for this coordinate combination
@@ -424,7 +421,7 @@ def fit_dataset(
 
 def fit_dataArray_models(
     da: 'DataArray', 
-    models: Sequence[fitModel], 
+    models: Union[fitModel, Sequence[fitModel]], 
     xname: str, # TODO: Explicitly add other arguments
     **kwargs):
     """
@@ -434,11 +431,14 @@ def fit_dataArray_models(
     ----------
     da : xr.DataArray
         DataArray to fit over
-    models : list of fitModel
+    models : fitModel or list of fitModel
         Models to use in fit. Will be combined additively
     xname : str
         dimension to fit over
     """
+    
+    if isinstance(models, fitModel):
+        models = [models]
     
     # make list of all unique parameters, with intersection of bounds if same 
     # parameter in multiple models
@@ -488,9 +488,10 @@ def fit_dataArray_models(
         bounds[0].append(p.bounds[0])
         bounds[1].append(p.bounds[1])
     
-    a = fit_dataArray(da, full_func, full_guess, [p.name for p in all_params], xname, bounds=tuple(bounds), **kwargs)
-    
-    return fitResultModel.from_fitResult(a, models)
+    return fitResultModel.from_fitResult(
+        fit_dataArray(da, full_func, full_guess, [p.name for p in all_params], xname, bounds=tuple(bounds), **kwargs),
+         models
+        )
 
 
 def fit_dataset_models(ds, models, xname, yname, yerr_name=None, **kwargs):
