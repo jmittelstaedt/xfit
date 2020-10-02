@@ -1,11 +1,12 @@
 from itertools import product
 
 from xfit.utils import coordinate_slice, da_filter, gen_coord_combo
-from xfit.utils import gen_copy_ds, combine_new_ds_dim
+from xfit.utils import gen_sim_da, combine_new_ds_dim
 
 import numpy as np
 import xarray as xr
 
+from numpy.testing import assert_array_equal
 from xarray.testing import assert_equal, assert_allclose
 
 da1 = xr.DataArray(
@@ -108,18 +109,35 @@ def test_gen_coord_combo():
     assert all([x == y for x, y in zip(actual_v, expected_v)])
     
     
-def test_gen_copy_ds():
+def test_gen_sim_da():
     new_dvars = ['first', 'second']
-    actual = gen_copy_ds(da1, new_dvars)
+    actual = gen_sim_da(da1)
     
-    assert all([x==y for x, y in zip(actual.dims, da1.dims)])
-    assert all([x==y for x, y in zip(actual.coords, da1.coords)])
-    assert all([x==y for x, y in zip(new_dvars, actual.data_vars)])
+    assert np.all(np.isnan(actual))
+    assert list(actual.coords) == list(da1.coords)
     for c in actual.coords:
         assert_equal(actual.coords[c], da1.coords[c])
+        
+    actual2 = gen_sim_da(da1, drop_dims=['c'])
+    assert np.all(np.isnan(actual2))
+    expected_coords = [c for c in da1.coords if c != 'c']
+    assert list(actual2.coords) == list(expected_coords)
+    for c in actual2.coords:
+        assert_equal(actual2.coords[c], da1.coords[c])
+
+    d_vals = np.array([12., 13., 14.])
+    actual3 = gen_sim_da(da1, new_coords={'d': d_vals})
+    assert np.all(np.isnan(actual3))
+    expected_coords = ['d', 'a', 'b', 'c']
+    assert set(actual3.coords) == set(expected_coords)
+    for c in da1.coords:
+        assert_equal(actual3.coords[c], da1.coords[c])
+    assert_array_equal(actual3.coords['d'].values, d_vals)
 
 
 def test_combine_new_ds_dim():
     expected = combine_new_ds_dim({9: da1, 99: da2}, "new")
-    
     assert_equal(expected, da12)
+    
+    expected2 = combine_new_ds_dim([da1, da2], "new", [9, 99])
+    assert_equal(expected2, da12)

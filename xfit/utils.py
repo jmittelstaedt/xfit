@@ -1,4 +1,7 @@
-from itertools import product
+try:
+    from tqdm.contrib.itertools import product
+except ImportError:
+    from itertools import product
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -147,10 +150,10 @@ def gen_coord_combo(
     return remaining_dims, product(*coord_vals)
 
 
-def gen_copy_ds(
-    ds: 'T_DSorDA', 
-    new_dvar_names: Sequence[str], 
-    drop_dims: Sequence[str] = []
+def gen_sim_da(
+    da: xr.DataArray,
+    drop_dims: Sequence[str] = [],
+    new_coords: Mapping[str, Sequence[float]] = {}
     ) -> 'Dataset':
     """
     Generates a copy of `ds` with identical coordinates but given
@@ -158,12 +161,12 @@ def gen_copy_ds(
     
     Parameters
     ----------
-    ds : xarray.Dataset
-        Dataset to base new one on
-    new_dvar_names : list of str
-        Data variable names of the new dataset
+    da : xarray.DataArray
+        DataArray to base new one on
     drop_dims : list of str
         Dimensions to leave off of the new dataset
+    new_coords
+        New dims/coordinates to add
     
     Returns
     -------
@@ -171,22 +174,21 @@ def gen_copy_ds(
         New dataset with desired data varialbes and subset of coordinates.
         Entries are meaningless and cannot be relied upon.
     """
-   
-    remaining_dims = tuple(dim for dim in ds.dims if dim not in drop_dims)
-    
-    # generate data vars with random data
-    sizes = tuple(ds.coords[dim].size for dim in remaining_dims)
-    variables = {dv: (remaining_dims, np.empty(sizes)) for dv in new_dvar_names}
+
+    del_sel = dict(zip(drop_dims, [0]*len(drop_dims)))
+    nda = xr.full_like(da.isel(del_sel).drop_vars(drop_dims), np.nan, dtype=float)
+    for ndim, ncvals in new_coords.items():
+        nda = xr.concat([nda]*len(ncvals), ndim)
+        nda[ndim] = list(ncvals)
         
-    new_coords = {d: v.values for d, v in ds.coords.items() if d in remaining_dims}
-    
-    return xr.Dataset(data_vars=variables, coords=new_coords)
+    return nda
 
 
 # TODO: add option for position of new axis/dimension?
 def combine_new_ds_dim(
-    ds_dict: Mapping[str, 'T_DSorDA'], 
-    new_dim: str
+    dss: Union[Mapping[str, 'T_DSorDA'], Sequence['T_DSorDA']], 
+    new_dim: str,
+    new_coords: Optional[Sequence[float]] = None
     ) -> 'T_DSorDA':
     """
     Combines a dictionary of datasets along a new dimension using dictionary keys
@@ -194,11 +196,12 @@ def combine_new_ds_dim(
 
     Parameters
     ----------
-    ds_dict : dict
-        Dictionary of xarray Datasets or dataArrays
+    dss : dict or list
+        Dictionary or list of xarray Datasets or dataArrays
     new_dim : str
         The name of the newly created dimension
-
+    new_coords
+        Only used if `dss` is a list
     Returns
     -------
     xarray.Dataset
@@ -210,11 +213,11 @@ def combine_new_ds_dim(
         If the values of the input dictionary were of an unrecognized type
     """
 
-    expanded_dss = []
-
-    for coord, ds in ds_dict.items():
-        expanded_dss.append(ds.expand_dims(new_dim))
-        expanded_dss[-1][new_dim] = [coord]
-    new_ds = xr.concat(expanded_dss, new_dim)
+    try:
+        new_ds = xr.concat(dss.values(), new_dim)
+        new_ds[new_dim] = list(dss.keys())
+    except:
+        new_ds = xr.concat(dss, new_dim)
+        new_ds[new_dim] = new_coords
 
     return new_ds

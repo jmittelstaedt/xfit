@@ -16,9 +16,8 @@ import xarray as xr
 from scipy.optimize import leastsq, curve_fit
 
 
-from .utils import da_filter, gen_coord_combo, gen_copy_ds
+from .utils import da_filter, gen_coord_combo, gen_sim_da
 from .models import fitModel
-from .fitResult import fitResult, fitResultModel
 
 
 if TYPE_CHECKING:
@@ -32,7 +31,7 @@ def make_fit_dataArray_guesses(
     xname: str, 
     xda: Optional['DataArray'] = None, 
     guess_func_help_params: Mapping[str, float] = {}
-    ):
+    ) -> 'DataArray':
     """
     creates a dataset of guesses of param_names given ``guess_func``. To be used
     in :func:`~.fit_dataArray`.
@@ -76,7 +75,7 @@ def make_fit_dataArray_guesses(
     combo_dims, coord_combos = gen_coord_combo(yda, [xname])
     
     # Generate empty dataset to contain parameter guesses
-    guess_ds = gen_copy_ds(yda, param_names, [xname])
+    guess_da = gen_sim_da(yda, [xname], {'param': param_names})
 
     # apply guess_func for each coord combo and record param guesses
     for combo in coord_combos:
@@ -90,8 +89,6 @@ def make_fit_dataArray_guesses(
         # Deal with any possible spurious data
         if np.all(np.isnan(ydata)):
             # there is no meaningful data. Fill guesses with nan's
-            for i, pname in enumerate(param_names):
-                guess_ds[pname].loc[selection_dict] = np.nan
             continue
         else:
             # remove bad datapoints
@@ -103,12 +100,11 @@ def make_fit_dataArray_guesses(
         guesses = guess_func(xdata, ydata, **guess_func_help_params, **selection_dict)
 
         # record fit parameters and their errors
-        for i, pname in enumerate(param_names):
-            guess_ds[pname].loc[selection_dict] = guesses[i]
+        guess_da.loc[selection_dict] = np.asarray(guesses)
 
-    return guess_ds
+    return guess_da
 
-# TODO: make another using leastsq? (to allow for broader cost functions)
+
 def fit_dataArray(
     yda: 'DataArray', 
     fit_func: Callable[[Sequence[float], float], Sequence[float]], 
@@ -118,13 +114,12 @@ def fit_dataArray(
     xda: Optional['DataArray'] = None, 
     yname: Optional[str] = None,
     yerr_da: Optional['DataArray'] = None,
-    bootstrap_samples=0, # TODO: remove bootstraping
     guess_func_help_params: Mapping[str, float] = {}, 
     ignore_faliure: bool = False,
     selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
     omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
     ranges: Mapping[str, Tuple[float, float]] = {},
-    **kwargs) -> fitResult:
+    **kwargs) -> 'Dataset':
     """
     Fits values in a data array to a function. Returns an
     :class:`~.fitResult` object
@@ -225,10 +220,11 @@ def fit_dataArray(
     good_args = cf_argspec.args + lsq_argspec.args
     cf_kwargs = {k: v for k, v in kwargs.items() if k in good_args}
 
-    full_param_names = param_names + [pname+'_err' for pname in param_names]
-
     # Get the selection and empty fit dataset
-    fit_ds = gen_copy_ds(yda, full_param_names, [xname])
+    param_template = gen_sim_da(yda, [xname], {'param': param_names})
+    cov_template = gen_sim_da(yda, [xname], {'param': param_names, 'param_cov': param_names})
+    fit_ds = xr.Dataset({'popt': param_template, 'perr': param_template.copy(), 'pcov': cov_template})
+    
     combo_dims, coord_combos = gen_coord_combo(yda, [xname])
 
     # Do the fitting
@@ -245,15 +241,11 @@ def fit_dataArray(
             yerr = None
 
         # load fit parameter guesses for this coordinate combination
-        guess = [float(guesses[pname].sel(selection_dict).values) for pname in param_names]
-        guess = np.array(guess)
+        guess = guesses.sel(selection_dict).values
 
         # Deal with any possible spurious data
         if np.all(np.isnan(ydata)):
             # there is no meaningful data. Fill fit results with nan's
-            for i, pname in enumerate(param_names):
-                fit_ds[pname].loc[selection_dict] = np.nan
-                fit_ds[pname+'_err'].loc[selection_dict] = np.nan
             continue
         else:
             # remove bad datapoints
@@ -266,9 +258,6 @@ def fit_dataArray(
 
         if ydata.size < len(param_names):
             print("Less finite datapoints than parameters at : ", selection_dict)
-            for i, pname in enumerate(param_names):
-                fit_ds[pname].loc[selection_dict] = np.nan
-                fit_ds[pname+'_err'].loc[selection_dict] = np.nan
             continue
 
         # fit
@@ -278,48 +267,28 @@ def fit_dataArray(
             perr = np.sqrt(np.diag(pcov)) # from curve_fit documentation
         except RuntimeError:
             if ignore_faliure:
-                popt = np.ones(len(param_names))*np.nan
-                perr = np.ones(len(param_names))*np.nan
+                nparams = len(param_names)
+                popt = np.ones(nparams)*np.nan
+                perr = np.ones(nparams)*np.nan
+                pcov = np.ones((nparams, nparams))*np.nan
             else:
                 raise
 
-        if bootstrap_samples > 0 and not np.all(np.isnan(popt)): # TODO: figure out a better way of handling points with large errors
-            fit_ys = fit_func(xdata, *popt)
-            residuals = ydata - fit_ys
-
-            if yerr_da is not None:
-                ys_weights = 1/yerr**2
-                ys_weights = ys_weights / ys_weights.sum()
-            else:
-                ys_weights = None
-            popts = []
-            for _ in range(bootstrap_samples):
-                # draw with replacement, weighting each residual by 1/error**2 so points
-                # with large errors are suppressed
-                residual_sample = np.random.choice(residuals, size=ydata.size, replace=True, p=ys_weights)
-                y_sample = fit_ys + residual_sample
-                popt_samp, _ = curve_fit(fit_func, xdata, y_sample, popt, **cf_kwargs)
-                popts.append(popt_samp)
-            popts = np.array(popts)
-            popt = popts.mean(0)
-            perr = popts.std(0)
-
         # record fit parameters and their errors
-        for i, pname in enumerate(param_names):
-            fit_ds[pname].loc[selection_dict] = popt[i]
-            fit_ds[pname+'_err'].loc[selection_dict] = perr[i]
+        fit_ds['popt'].loc[selection_dict] = popt
+        fit_ds['perr'].loc[selection_dict] = perr
+        fit_ds['pcov'].loc[selection_dict] = pcov
 
-    return fitResult(
-        fit_ds,
-        yda,
-        xda,
-        fit_func,
-        guess_func,
-        param_names,
-        xname,
-        yname,
-        yerr_da
-    )
+    fit_ds['xda'] = xda
+    fit_ds['yda'] = yda
+    fit_ds['yerr_da'] = yerr_da if yerr_da is not None else xr.full_like(yda, np.nan, dtype=float)
+    
+    fit_ds.attrs['fit_func'] = fit_func
+    fit_ds.attrs['param_names'] = param_names
+    fit_ds.attrs['xname'] = xname
+    fit_ds.attrs['yname'] = yname
+    
+    return fit_ds
 
 
 def fit_dataset(
@@ -331,14 +300,13 @@ def fit_dataset(
     yname: str,
     xda_name: Optional[str] = None,
     yerr_name: Optional[str] = None,
-    bootstrap_samples=0, # TODO: remove bootstraping
     guess_func_help_params: Mapping[str, float] = {}, 
     ignore_faliure: bool = False,
     selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
     omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
     ranges: Mapping[str, Tuple[float, float]] = {},
     **kwargs
-    ) -> fitResult:
+    ) -> 'Dataset':
     """
     Fits values in a dataset to a function. Returns an
     :class:`~.fitResult` object.
@@ -414,9 +382,8 @@ def fit_dataset(
     fit_da = ds[yname]
 
     return fit_dataArray(fit_da, fit_func, guess_func, param_names, xname, xda,
-                         yname, yerr_da, bootstrap_samples,
-                         guess_func_help_params, ignore_faliure, selections,
-                         omissions, ranges, **kwargs)
+                         yname, yerr_da, guess_func_help_params, ignore_faliure,
+                         selections, omissions, ranges, **kwargs)
 
 
 def fit_dataArray_models(
@@ -488,10 +455,12 @@ def fit_dataArray_models(
         bounds[0].append(p.bounds[0])
         bounds[1].append(p.bounds[1])
     
-    return fitResultModel.from_fitResult(
-        fit_dataArray(da, full_func, full_guess, [p.name for p in all_params], xname, bounds=tuple(bounds), **kwargs),
-         models
-        )
+    fit_ds = fit_dataArray(da, full_func, full_guess, 
+                           [p.name for p in all_params], xname, 
+                           bounds=tuple(bounds), **kwargs)
+    fit_ds.attrs['models'] = {m.name: m for m in models}
+    
+    return fit_ds
 
 
 def fit_dataset_models(ds, models, xname, yname, yerr_name=None, **kwargs):
