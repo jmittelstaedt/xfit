@@ -1,4 +1,4 @@
-from xfit.fitting import fit_dataArray, fit_dataArray_models
+from xfit.fitting import fit_dataArray, fit_dataArray_models, fit_dataset
 
 import numpy as np
 import xarray as xr
@@ -16,6 +16,8 @@ data = xr.DataArray(
         'x': np.arange(10)
     }
     )
+
+data_ds = xr.Dataset({'data': data})
 
 expected_popt = xr.DataArray(np.arange(5).reshape(1,5), 
                              coords={'param': ['b'], 'b_true': np.arange(5)},
@@ -55,4 +57,20 @@ def test_basic_fit_dataArray():
         },
         attrs={'fit_func': const, 'param_names': ['b'], 'xname': 'x', 'yname': None})
     
+    assert_equal(expected, actual)
+
+def test_basic_fit_dataset():
+    actual = fit_dataset(data_ds, const, const_guess, const_params, 'x', 'data')
+
+    expected = xr.Dataset(
+        {
+            'popt': expected_popt,
+            'perr': expected_perr,
+            'pcov': expected_pcov,
+            'xda': expected_xda,
+            'yda': expected_yda,
+            'yerr_da': expected_yerr_da
+        },
+        attrs={'fit_func': const, 'param_names': ['b'], 'xname': 'x', 'yname': None})
+
     assert_equal(expected, actual)

@@ -1,6 +1,5 @@
 from inspect import getfullargspec
 from typing import (
-    TYPE_CHECKING,
     Callable,
     Mapping,
     Optional,
@@ -17,10 +16,6 @@ from matplotlib.lines import Line2D
 
 
 from .utils import da_filter, gen_coord_combo
-
-
-if TYPE_CHECKING:
-    from xarray import DataArray, Dataset
 
 
 def plot_fits(fit_ds, overlay_data = True, pts_per_plot = 200,
@@ -137,6 +132,7 @@ def plot_fits(fit_ds, overlay_data = True, pts_per_plot = 200,
         except:
             plt.title('')
         plt.show()
+
 
 def plot_model_fits(fit_ds, plot_models='all', plot_total=True, background_models=[],
                     overlay_data=True, pts_per_plot=200, show_legend=True, 

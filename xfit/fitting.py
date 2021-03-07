@@ -29,7 +29,7 @@ def make_fit_dataArray_guesses(
     guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
     param_names: Sequence[str], 
     xname: str, 
-    xda: Optional['DataArray'] = None, 
+    xda: 'DataArray', 
     guess_func_help_params: Mapping[str, float] = {}
     ) -> 'DataArray':
     """
@@ -58,6 +58,10 @@ def make_fit_dataArray_guesses(
         by ``guess_func``
     xname : str
         the name of the  ``dim`` of ``da`` to be fit along
+    xda : xarray.DataArray
+        DataArray containing the independent variable. The dims of this DataArray
+        must be a subset of yda's dims, must include ``xname`` as a dim, and 
+        coordinates must match along dims that they share.
     guess_func_help_params : dict
         Dictionary of any "constant" parameters to help in generating fit
         guesses. Passed as keyword arguments to ``guess_func``.
@@ -267,10 +271,8 @@ def fit_dataArray(
             perr = np.sqrt(np.diag(pcov)) # from curve_fit documentation
         except RuntimeError:
             if ignore_faliure:
-                nparams = len(param_names)
-                popt = np.ones(nparams)*np.nan
-                perr = np.ones(nparams)*np.nan
-                pcov = np.ones((nparams, nparams))*np.nan
+                # leave filled with nan
+                continue
             else:
                 raise
 

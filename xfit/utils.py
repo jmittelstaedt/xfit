@@ -107,7 +107,7 @@ def gen_coord_combo(
     selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
     omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
     ranges: Mapping[str, Tuple[float, float]] = {}
-    ) -> product:
+    ) -> Tuple[Sequence[str], product]:
     """
     Generates a cartesian product of combinations of all coordinates of the
     given dataset, subject to coordinate constraints and excluded dimensions.
