@@ -10,6 +10,6 @@ setup(
     #     "xarray,
     #     "numpy",
     #     "scipy",
-    #     "pyplot"
+    #     "matplotlib"
     # ]
 )

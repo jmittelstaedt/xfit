@@ -3,7 +3,7 @@
 [Xarray](https://xarray.pydata.org/en/stable/) is a package providing labelled
 N-dimensional arrays. 
 This makes it convenient for storing data in a variety of application domains. 
-Xfit attempts to provide an easy way to fit data contained in an xarray object
+Xfit provides an easy way to fit data contained in an xarray object
 to an arbitrary nonlinear function using [scipy's curve fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html).
 
 # Usage
@@ -63,13 +63,14 @@ fit = fit_dataArray(
 )
 ```
 
-`fit` is now a `fitResult` object, containing the results of fitting our data.
-The main results are contained in `fit.fit_ds`, which is a `Dataset` with two 
-`DataArray`'s per parameter: one containing the value of the parameter and
-another containing its error.
-The dimensions and coordinates of this new `Dataset` are the same as the `data_da`
-`DataArray`, excluding the dimension that we fit over.
-This object has other features, but we will talk about them elsewhere.
+`fit` is now a `Dataset`, containing the results of fitting our data.
+The main results are contained in `popt`, which has a `dim` for each parameter
+in the fit model as well as the same dims as the `data_da` we fit over, excluding
+the `xdim` that we fit over.
+The error estimates are stored in `perr` which has the same structure as `popt`,
+and the full covariance matrix is stored in `pcov`.
+The `fit` `Dataset` also contains some possibly useful information in its `attrs`,
+such as the function the data was fit to. 
 
 ## Fitting Datasets
 
@@ -90,8 +91,7 @@ fit2 = fit_dataset(
 )
 ```
 
-and now `fit2` is the same kind of object as `fit`, and should actually
-be identical in this simple example.
+and now `fit2` is the same as `fit`.
 
 # Installation
 
@@ -101,5 +101,5 @@ The dependencies are:
 - xarray
 - numpy
 - scipy
-- pyplot
-- python > 3.6
+- matplotlib
+- python >= 3.6
