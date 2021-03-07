@@ -107,3 +107,7 @@ fit2 = fit_dataset(
 ```
 
 and now `fit2` is the same as `fit`.
+
+## More Examples
+
+There are example notebooks of how to use the features in the `doc/` folder of this repo.
