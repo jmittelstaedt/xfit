@@ -6,6 +6,21 @@ This makes it convenient for storing data in a variety of application domains.
 Xfit provides an easy way to fit data contained in an xarray object
 to an arbitrary nonlinear function using [scipy's curve fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html).
 
+# Installation
+
+This package is only on github (for now), so you can clone and install using
+```bash
+cd xfit/
+python -m pip install -e .
+```
+If the dependencies were not installed automatically, they are:
+- python >= 3.6
+- xarray
+- numpy
+- scipy
+- matplotlib
+
+
 # Usage
 
 We'll briefly describe the two main fitting methods here.
@@ -92,14 +107,3 @@ fit2 = fit_dataset(
 ```
 
 and now `fit2` is the same as `fit`.
-
-# Installation
-
-For now, this package is not on pypi so you will need to clone and install
-locally for now.
-The dependencies are:
-- xarray
-- numpy
-- scipy
-- matplotlib
-- python >= 3.6
