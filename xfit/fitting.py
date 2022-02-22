@@ -7,7 +7,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
-    Hashable
+    Hashable,
 )
 
 
@@ -25,13 +25,13 @@ if TYPE_CHECKING:
 
 
 def make_fit_dataArray_guesses(
-    yda: 'DataArray', 
-    guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
-    param_names: Sequence[str], 
-    xname: str, 
-    xda: 'DataArray', 
-    guess_func_help_params: Mapping[str, float] = {}
-    ) -> 'DataArray':
+    yda: "DataArray",
+    guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]],
+    param_names: Sequence[str],
+    xname: str,
+    xda: "DataArray",
+    guess_func_help_params: Mapping[str, float] = {},
+) -> "DataArray":
     """
     creates a dataset of guesses of param_names given ``guess_func``. To be used
     in :func:`~.fit_dataArray`.
@@ -60,7 +60,7 @@ def make_fit_dataArray_guesses(
         the name of the  ``dim`` of ``da`` to be fit along
     xda : xarray.DataArray
         DataArray containing the independent variable. The dims of this DataArray
-        must be a subset of yda's dims, must include ``xname`` as a dim, and 
+        must be a subset of yda's dims, must include ``xname`` as a dim, and
         coordinates must match along dims that they share.
     guess_func_help_params : dict
         Dictionary of any "constant" parameters to help in generating fit
@@ -77,9 +77,9 @@ def make_fit_dataArray_guesses(
     xdims = xda.dims
 
     combo_dims, coord_combos = gen_coord_combo(yda, [xname])
-    
+
     # Generate empty dataset to contain parameter guesses
-    guess_da = gen_sim_da(yda, [xname], {'param': param_names})
+    guess_da = gen_sim_da(yda, [xname], {"param": param_names})
 
     # apply guess_func for each coord combo and record param guesses
     for combo in coord_combos:
@@ -110,20 +110,21 @@ def make_fit_dataArray_guesses(
 
 
 def fit_dataArray(
-    yda: 'DataArray', 
-    fit_func: Callable[[Sequence[float], float], Sequence[float]], 
-    guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
-    param_names: Sequence[str], 
-    xname: str, 
-    xda: Optional['DataArray'] = None, 
+    yda: "DataArray",
+    fit_func: Callable[[Sequence[float], float], Sequence[float]],
+    guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]],
+    param_names: Sequence[str],
+    xname: str,
+    xda: Optional["DataArray"] = None,
     yname: Optional[str] = None,
-    yerr_da: Optional['DataArray'] = None,
-    guess_func_help_params: Mapping[str, float] = {}, 
+    yerr_da: Optional["DataArray"] = None,
+    guess_func_help_params: Mapping[str, float] = {},
     ignore_faliure: bool = False,
-    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
-    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {},
+    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {},
     ranges: Mapping[str, Tuple[float, float]] = {},
-    **kwargs) -> 'Dataset':
+    **kwargs
+) -> "Dataset":
     """
     Fits values in a data array to a function. Returns an
     :class:`~.fitResult` object
@@ -154,7 +155,7 @@ def fit_dataArray(
         the name of the ``dim`` of ``da`` to be fit along
     xda : xarray.DataArray or None
         If given, dataArray containing data to use as the dependent variable
-        in the fits. Must include ``xname`` among its dims and have a 
+        in the fits. Must include ``xname`` among its dims and have a
         subset of the coords of ``yda``
     yname : str or None
         Optional. The name of the y data being fit over.
@@ -188,7 +189,7 @@ def fit_dataArray(
     fitResult
         Object containing all results of fitting and some convenience methods.
     """
-    
+
     selections = {} if selections is None else selections
     omissions = {} if omissions is None else omissions
     ranges = {} if ranges is None else ranges
@@ -200,22 +201,19 @@ def fit_dataArray(
     for kw in kwargs:
         if kw in yda.dims:
             selections[kw] = kwargs[kw]
-    
+
     xselections = {dim: sel for dim, sel in selections.items() if dim in xda.dims}
     xomissions = {dim: sel for dim, sel in omissions.items() if dim in xda.dims}
     xranges = {dim: sel for dim, sel in ranges.items() if dim in xda.dims}
-    
+
     xda = da_filter(xda, selections=xselections, omissions=xomissions, ranges=xranges)
     yda = da_filter(yda, selections=selections, omissions=omissions, ranges=ranges)
     if yerr_da is not None:
-        yerr_da = da_filter(yerr_da, selections=selections, omissions=omissions, ranges=ranges)
+        yerr_da = da_filter(
+            yerr_da, selections=selections, omissions=omissions, ranges=ranges
+        )
     guesses = make_fit_dataArray_guesses(
-        yda,
-        guess_func,
-        param_names,
-        xname,
-        xda,
-        guess_func_help_params
+        yda, guess_func, param_names, xname, xda, guess_func_help_params
     )
 
     # Determine which kwargs can be passed to curve_fit
@@ -225,16 +223,20 @@ def fit_dataArray(
     cf_kwargs = {k: v for k, v in kwargs.items() if k in good_args}
 
     # Get the selection and empty fit dataset
-    param_template = gen_sim_da(yda, [xname], {'param': param_names})
-    cov_template = gen_sim_da(yda, [xname], {'param': param_names, 'param_cov': param_names})
-    fit_ds = xr.Dataset({'popt': param_template, 'perr': param_template.copy(), 'pcov': cov_template})
-    
+    param_template = gen_sim_da(yda, [xname], {"param": param_names})
+    cov_template = gen_sim_da(
+        yda, [xname], {"param": param_names, "param_cov": param_names}
+    )
+    fit_ds = xr.Dataset(
+        {"popt": param_template, "perr": param_template.copy(), "pcov": cov_template}
+    )
+
     combo_dims, coord_combos = gen_coord_combo(yda, [xname])
 
     # Do the fitting
     for combo in coord_combos:
         selection_dict = dict(zip(combo_dims, combo))
-        xselection_dict = {k: v for k,v in selection_dict.items() if k in xda.dims}
+        xselection_dict = {k: v for k, v in selection_dict.items() if k in xda.dims}
 
         # load x/y data for this coordinate combination
         ydata = yda.sel(selection_dict).values
@@ -267,8 +269,10 @@ def fit_dataArray(
         # fit
         try:
             asig = True if yerr_da is not None else False
-            popt, pcov = curve_fit(fit_func, xdata, ydata, guess, yerr, absolute_sigma=asig, **cf_kwargs)
-            perr = np.sqrt(np.diag(pcov)) # from curve_fit documentation
+            popt, pcov = curve_fit(
+                fit_func, xdata, ydata, guess, yerr, absolute_sigma=asig, **cf_kwargs
+            )
+            perr = np.sqrt(np.diag(pcov))  # from curve_fit documentation
         except RuntimeError:
             if ignore_faliure:
                 # leave filled with nan
@@ -277,38 +281,40 @@ def fit_dataArray(
                 raise
 
         # record fit parameters and their errors
-        fit_ds['popt'].loc[selection_dict] = popt
-        fit_ds['perr'].loc[selection_dict] = perr
-        fit_ds['pcov'].loc[selection_dict] = pcov
+        fit_ds["popt"].loc[selection_dict] = popt
+        fit_ds["perr"].loc[selection_dict] = perr
+        fit_ds["pcov"].loc[selection_dict] = pcov
 
-    fit_ds['xda'] = xda
-    fit_ds['yda'] = yda
-    fit_ds['yerr_da'] = yerr_da if yerr_da is not None else xr.full_like(yda, np.nan, dtype=float)
-    
-    fit_ds.attrs['fit_func'] = fit_func
-    fit_ds.attrs['param_names'] = param_names
-    fit_ds.attrs['xname'] = xname
-    fit_ds.attrs['yname'] = yname
-    
+    fit_ds["xda"] = xda
+    fit_ds["yda"] = yda
+    fit_ds["yerr_da"] = (
+        yerr_da if yerr_da is not None else xr.full_like(yda, np.nan, dtype=float)
+    )
+
+    fit_ds.attrs["fit_func"] = fit_func
+    fit_ds.attrs["param_names"] = param_names
+    fit_ds.attrs["xname"] = xname
+    fit_ds.attrs["yname"] = yname
+
     return fit_ds
 
 
 def fit_dataset(
-    ds: 'Dataset', 
-    fit_func: Callable[[Sequence[float], float], Sequence[float]], 
-    guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]], 
-    param_names: Sequence[str], 
+    ds: "Dataset",
+    fit_func: Callable[[Sequence[float], float], Sequence[float]],
+    guess_func: Callable[[Sequence[float], Sequence[float]], Sequence[float]],
+    param_names: Sequence[str],
     xname: str,
     yname: str,
     xda_name: Optional[str] = None,
     yerr_name: Optional[str] = None,
-    guess_func_help_params: Mapping[str, float] = {}, 
+    guess_func_help_params: Mapping[str, float] = {},
     ignore_faliure: bool = False,
-    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
-    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {}, 
+    selections: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {},
+    omissions: Mapping[str, Union[Hashable, Sequence[Hashable]]] = {},
     ranges: Mapping[str, Tuple[float, float]] = {},
     **kwargs
-    ) -> 'Dataset':
+) -> "Dataset":
     """
     Fits values in a dataset to a function. Returns an
     :class:`~.fitResult` object.
@@ -376,26 +382,40 @@ def fit_dataset(
     fitResult
         Result of the fitting
     """
-    
+
     yerr_da = None if yerr_name is None else ds[yerr_name]
-    
+
     xda = None if xda_name is None else ds[xda_name]
 
     fit_da = ds[yname]
 
-    return fit_dataArray(fit_da, fit_func, guess_func, param_names, xname, xda,
-                         yname, yerr_da, guess_func_help_params, ignore_faliure,
-                         selections, omissions, ranges, **kwargs)
+    return fit_dataArray(
+        fit_da,
+        fit_func,
+        guess_func,
+        param_names,
+        xname,
+        xda,
+        yname,
+        yerr_da,
+        guess_func_help_params,
+        ignore_faliure,
+        selections,
+        omissions,
+        ranges,
+        **kwargs
+    )
 
 
 def fit_dataArray_models(
-    da: 'DataArray', 
-    models: Union[fitModel, Sequence[fitModel]], 
-    xname: str, # TODO: Explicitly add other arguments
-    **kwargs):
+    da: "DataArray",
+    models: Union[fitModel, Sequence[fitModel]],
+    xname: str,  # TODO: Explicitly add other arguments
+    **kwargs
+):
     """
     fits a dataArray to a collection of models
-    
+
     Parameters
     ----------
     da : xr.DataArray
@@ -405,11 +425,11 @@ def fit_dataArray_models(
     xname : str
         dimension to fit over
     """
-    
+
     if isinstance(models, fitModel):
         models = [models]
-    
-    # make list of all unique parameters, with intersection of bounds if same 
+
+    # make list of all unique parameters, with intersection of bounds if same
     # parameter in multiple models
     all_params = []
     for m in models:
@@ -418,7 +438,7 @@ def fit_dataArray_models(
                 if p == param:
                     p.intersect(param)
                     break
-            else: # if not found in all_params
+            else:  # if not found in all_params
                 all_params.append(param)
 
     def full_func(x, *args):
@@ -431,12 +451,12 @@ def fit_dataArray_models(
     # mean of estimate from each model TODO: should we do median instead?
     def full_guess(x, y, **kwargs):
         guesses = []
-        
+
         # generate parameter guesses from each model
         for m in models:
             model_guesses = np.atleast_1d(m.guess(x, y, **kwargs))
             guesses.append(dict(zip([p.name for p in m.params], model_guesses)))
-        
+
         # take the mean of all guesses for each parameter
         final_guesses = []
         for param in all_params:
@@ -448,27 +468,33 @@ def fit_dataArray_models(
                     cumsum += guess[param.name]
                 else:
                     pass
-            final_guesses.append(cumsum/count)
-            
+            final_guesses.append(cumsum / count)
+
         return final_guesses
-    
+
     bounds = [[], []]
     for p in all_params:
         bounds[0].append(p.bounds[0])
         bounds[1].append(p.bounds[1])
-    
-    fit_ds = fit_dataArray(da, full_func, full_guess, 
-                           [p.name for p in all_params], xname, 
-                           bounds=tuple(bounds), **kwargs)
-    fit_ds.attrs['models'] = {m.name: m for m in models}
-    
+
+    fit_ds = fit_dataArray(
+        da,
+        full_func,
+        full_guess,
+        [p.name for p in all_params],
+        xname,
+        bounds=tuple(bounds),
+        **kwargs
+    )
+    fit_ds.attrs["models"] = {m.name: m for m in models}
+
     return fit_ds
 
 
 def fit_dataset_models(ds, models, xname, yname, yerr_name=None, **kwargs):
     """
     Fits a dataset to a collection of models, combined additively
-    
+
     Parameters
     ----------
     ds : xr.Dataset
@@ -482,16 +508,17 @@ def fit_dataset_models(ds, models, xname, yname, yerr_name=None, **kwargs):
     yerr_name : str
         name of dataArray to use as the errors in the dependent variable
     """
-    
+
     if yerr_name is not None:
         if yerr_name not in ds.data_vars:
-            raise AttributeError('%s is not a data_var!'%yerr_name)
+            raise AttributeError("%s is not a data_var!" % yerr_name)
         else:
             yerr_da = ds[yerr_name]
     else:
-        yerr_da=None
+        yerr_da = None
 
     fit_da = ds[yname]
 
-    return fit_dataArray_models(fit_da, models, xname,
-                         yname=yname, yerr_da=yerr_da, **kwargs)
+    return fit_dataArray_models(
+        fit_da, models, xname, yname=yname, yerr_da=yerr_da, **kwargs
+    )
